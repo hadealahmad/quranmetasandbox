@@ -25,6 +25,9 @@ import {
   ChevronDown
 } from 'lucide-react';
 import type { Surah, Page, Juz, AyahNo, Manzil, Ruku } from 'quran-meta/hafs';
+import { runSuiteTest, initialSuitesState } from './validationRunner';
+import type { ValidationSuiteState } from './validationRunner';
+import { Play, RotateCcw, AlertTriangle, CheckCircle2, ShieldCheck, Terminal as TerminalIcon, HelpCircle, Loader2, Database } from 'lucide-react';
 
 // Bilingual UI translations
 const translations = {
@@ -239,6 +242,120 @@ export default function App() {
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
+  // Data Validation Suite State
+  const [suites, setSuites] = useState<ValidationSuiteState[]>(initialSuitesState);
+  const [activeSuiteId, setActiveSuiteId] = useState<string>('tanzil');
+  const [isSuiteRunning, setIsSuiteRunning] = useState<boolean>(false);
+  const consoleRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll the console to the bottom when new logs pour in
+  const activeSuite = useMemo(() => suites.find(s => s.testId === activeSuiteId), [suites, activeSuiteId]);
+  useEffect(() => {
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    }
+  }, [activeSuite?.logs.length]);
+
+  // Dynamic validation test trigger handlers
+  const runTest = async (testId: string) => {
+    if (isSuiteRunning) return;
+    setIsSuiteRunning(true);
+    
+    // Reset test suite state before running
+    setSuites(prev => prev.map(s => s.testId === testId ? {
+      ...s,
+      status: 'loading',
+      assertionCount: 0,
+      failureCount: 0,
+      durationMs: 0,
+      logs: []
+    } : s));
+
+    const logCallback = (message: string, type: 'info' | 'success' | 'warn' | 'error') => {
+      const newLog = {
+        message,
+        type,
+        timestamp: new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour12: false })
+      };
+      setSuites(prev => prev.map(s => s.testId === testId ? {
+        ...s,
+        logs: [...s.logs, newLog]
+      } : s));
+    };
+
+    const updateCallback = (update: Partial<ValidationSuiteState>) => {
+      setSuites(prev => prev.map(s => s.testId === testId ? {
+        ...s,
+        ...update
+      } : s));
+    };
+
+    try {
+      await runSuiteTest(testId, updateCallback, logCallback);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setIsSuiteRunning(false);
+    }
+  };
+
+  const runAllTests = async () => {
+    if (isSuiteRunning) return;
+    setIsSuiteRunning(true);
+
+    // Run them sequentially so the active suite panel shifts automatically
+    const testIds = suites.map(s => s.testId);
+    for (const testId of testIds) {
+      setActiveSuiteId(testId);
+      
+      setSuites(prev => prev.map(s => s.testId === testId ? {
+        ...s,
+        status: 'loading',
+        assertionCount: 0,
+        failureCount: 0,
+        durationMs: 0,
+        logs: []
+      } : s));
+
+      const logCallback = (message: string, type: 'info' | 'success' | 'warn' | 'error') => {
+        const newLog = {
+          message,
+          type,
+          timestamp: new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour12: false })
+        };
+        setSuites(prev => prev.map(s => s.testId === testId ? {
+          ...s,
+          logs: [...s.logs, newLog]
+        } : s));
+      };
+
+      const updateCallback = (update: Partial<ValidationSuiteState>) => {
+        setSuites(prev => prev.map(s => s.testId === testId ? {
+          ...s,
+          ...update
+        } : s));
+      };
+
+      try {
+        await runSuiteTest(testId, updateCallback, logCallback);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setIsSuiteRunning(false);
+  };
+
+  const clearAllLogs = () => {
+    setSuites(prev => prev.map(s => ({
+      ...s,
+      status: 'idle',
+      assertionCount: 0,
+      failureCount: 0,
+      durationMs: 0,
+      logs: []
+    })));
+  };
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Resolve current active Recitation Engine
@@ -250,6 +367,11 @@ export default function App() {
 
   // Set active translations
   const t = useMemo(() => translations[lang], [lang]);
+
+  // Sum of all verification statistics
+  const totalAssertions = useMemo(() => suites.reduce((acc, s) => acc + s.assertionCount, 0), [suites]);
+  const totalFailures = useMemo(() => suites.reduce((acc, s) => acc + s.failureCount, 0), [suites]);
+  const totalDuration = useMemo(() => suites.reduce((acc, s) => acc + s.durationMs, 0), [suites]);
 
   // Sync color theme
   useEffect(() => {
@@ -2336,6 +2458,292 @@ console.log(shiftData); // { juz: ${juzNum}, leftAyahId: ${juzShiftData?.leftAya
 
           <div className="p-6 bg-black/90 font-mono text-xs sm:text-sm text-zinc-300 leading-relaxed overflow-x-auto border-t border-border">
             <pre className="whitespace-pre">{generatedCode}</pre>
+          </div>
+        </section>
+
+        {/* ==================================================== */}
+        {/* DATA VALIDATION & TESTS SUITE SECTION                */}
+        {/* ==================================================== */}
+        <section className="glass shadow-premium rounded-lg border border-border overflow-hidden text-start space-y-6">
+          <div className="bg-secondary/35 p-5 border-b border-border flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 text-primary border border-primary/20 rounded">
+                <Database size={18} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-foreground text-base">
+                  {lang === 'ar' ? 'منظومة مطابقة وفحص صحة البيانات' : 'Data Correctness & Cross-Check Suite'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {lang === 'ar'
+                    ? 'فحص ومطابقة إحداثيات ومواقع الآيات في quran-meta مع البيانات العالمية وخطوط مجمع الملك فهد الرسمية'
+                    : 'Real-time cross-validation engine testing quran-meta against external APIs and official KFGQPC datasets'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {suites.some(s => s.logs.length > 0) && (
+                <button
+                  onClick={clearAllLogs}
+                  disabled={isSuiteRunning}
+                  className="flex items-center gap-1.5 bg-secondary text-foreground border border-border hover:bg-secondary/80 font-bold text-xs px-3.5 py-2.5 rounded transition-all shadow-sm active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <RotateCcw size={14} />
+                  <span>{lang === 'ar' ? 'تهيئة السجلات' : 'Reset Logs'}</span>
+                </button>
+              )}
+              
+              <button
+                onClick={runAllTests}
+                disabled={isSuiteRunning}
+                className="flex items-center gap-1.5 bg-primary text-primary-foreground font-extrabold text-xs px-4 py-2.5 rounded transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:opacity-90 font-sans"
+              >
+                {isSuiteRunning ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <ShieldCheck size={14} />
+                )}
+                <span>
+                  {isSuiteRunning
+                    ? (lang === 'ar' ? 'جاري الفحص المنهجي...' : 'Validating All...')
+                    : (lang === 'ar' ? 'تشغيل فحص المنظومة كاملة' : 'Run Full Suite')}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6 space-y-6">
+            
+            {/* Live Statistics Gauges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              
+              {/* Verified Assertions Meter */}
+              <div className="bg-secondary/10 rounded-lg border border-border p-4 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                  <ShieldCheck size={72} />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block font-sans">
+                    {lang === 'ar' ? 'عمليات التحقق الناجحة' : 'Verified Assertions'}
+                  </span>
+                  <span className="text-2xl font-black font-mono text-emerald-500 tracking-tight leading-none block">
+                    {totalAssertions.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
+              </div>
+
+              {/* Mismatches Card */}
+              <div className="bg-secondary/10 rounded-lg border border-border p-4 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                  <AlertTriangle size={72} />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block font-sans">
+                    {lang === 'ar' ? 'المخالفات المكتشفة' : 'Mismatches Found'}
+                  </span>
+                  <span className={`text-2xl font-black font-mono tracking-tight leading-none block ${
+                    totalFailures > 0 ? 'text-red-500 animate-pulse' : 'text-foreground'
+                  }`}>
+                    {totalFailures}
+                  </span>
+                </div>
+                <div className={`h-2 w-2 rounded-full ${
+                  totalFailures > 0 ? 'bg-red-500 animate-ping' : 'bg-muted-foreground/30'
+                }`} />
+              </div>
+
+              {/* Total Execution Duration */}
+              <div className="bg-secondary/10 rounded-lg border border-border p-4 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                  <Loader2 size={72} />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block font-sans">
+                    {lang === 'ar' ? 'الزمن المستغرق' : 'Total Suite Duration'}
+                  </span>
+                  <span className="text-2xl font-black font-mono text-blue-500 tracking-tight leading-none block">
+                    {totalDuration > 0 ? `${totalDuration.toFixed(0)} ms` : '0 ms'}
+                  </span>
+                </div>
+                <div className={`h-2 w-2 rounded-full ${
+                  isSuiteRunning ? 'bg-blue-500 animate-spin' : 'bg-blue-500/40'
+                }`} />
+              </div>
+
+            </div>
+
+            {/* Test Suite Panels and Output Logging Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Left Side: Test Selector (5 Cols) */}
+              <div className="lg:col-span-5 space-y-2 border border-border/60 rounded-lg p-2.5 bg-secondary/15">
+                <div className="px-2 py-1.5 border-b border-border/40 mb-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block font-sans">
+                    {lang === 'ar' ? 'مجموعات بيانات المطابقة' : 'Validation Datasets'}
+                  </span>
+                </div>
+                
+                {suites.map((suite) => {
+                  const isActive = suite.testId === activeSuiteId;
+                  return (
+                    <button
+                      key={suite.testId}
+                      onClick={() => setActiveSuiteId(suite.testId)}
+                      className={`w-full flex items-center justify-between p-3 rounded-md transition-all text-start border group relative overflow-hidden cursor-pointer ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                          : 'bg-background hover:bg-secondary/35 text-foreground border-border'
+                      }`}
+                    >
+                      <div className="space-y-0.5 relative z-10">
+                        <p className="text-xs font-bold leading-none font-sans">
+                          {lang === 'ar' ? suite.nameAr : suite.nameEn}
+                        </p>
+                        <span className={`text-[9px] font-mono tracking-wider font-bold block ${
+                          isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                        }`}>
+                          {suite.testId === 'tanzil' ? 'tanzil-data.js (ES Module)' : 
+                           suite.testId === 'qcloud' ? 'qcloud-meta.json (132 KB)' :
+                           suite.testId === 'qapi' ? 'quran-api.json (2.3 MB)' :
+                           suite.testId === 'kfqc-hafs' ? 'hafsData_v2-0.json (3.6 MB)' :
+                           suite.testId === 'kfqc-smart' ? 'hafs_smart_v8.json (4.2 MB)' :
+                           suite.testId === 'kfqc-shuba' ? 'shubaData_v2-0.json (2.7 MB)' :
+                           suite.testId === 'kfqc-qalun' ? 'QalounData_v2-1.json (2.8 MB)' :
+                           'warshData_v2-1.json (2.8 MB)'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 relative z-10" onClick={(e) => e.stopPropagation()}>
+                        {suite.assertionCount > 0 && (
+                          <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                            isActive ? 'bg-white/20 text-white' : 'bg-secondary text-foreground/80'
+                          }`}>
+                            {suite.assertionCount}
+                          </span>
+                        )}
+                        
+                        {suite.status === 'loading' && <Loader2 size={13} className="animate-spin text-primary" />}
+                        {suite.status === 'running' && <Loader2 size={13} className="animate-spin text-primary" />}
+                        {suite.status === 'passed' && <CheckCircle2 size={13} className={isActive ? 'text-white' : 'text-emerald-500'} />}
+                        {suite.status === 'failed' && <AlertTriangle size={13} className={isActive ? 'text-white' : 'text-red-500'} />}
+                        
+                        {suite.status === 'idle' && (
+                          <button
+                            disabled={isSuiteRunning}
+                            onClick={() => {
+                              setActiveSuiteId(suite.testId);
+                              runTest(suite.testId);
+                            }}
+                            className={`p-1.5 rounded transition-all cursor-pointer ${
+                              isActive
+                                ? 'hover:bg-white/20 text-white'
+                                : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+                            } disabled:opacity-40 disabled:cursor-not-allowed`}
+                          >
+                            <Play size={10} fill="currentColor" />
+                          </button>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right Side: Logging Console (7 Cols) */}
+              <div className="lg:col-span-7 space-y-4">
+                
+                {/* Console header */}
+                <div className="bg-background border border-border rounded-lg overflow-hidden flex flex-col shadow-sm">
+                  <div className="bg-secondary/45 border-b border-border p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-foreground">
+                      <TerminalIcon size={14} className="text-primary" />
+                      <span className="text-xs font-bold font-mono uppercase tracking-wider">
+                        {lang === 'ar' ? 'منصة مخرجات التشخيص الفوري' : 'Diagnostic Console'}
+                      </span>
+                    </div>
+
+                    {activeSuite && activeSuite.durationMs > 0 && (
+                      <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-secondary/80 border border-border text-foreground/80">
+                        {activeSuite.durationMs.toFixed(1)} ms
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dark terminal-like window */}
+                  <div 
+                    ref={consoleRef}
+                    className="bg-zinc-950 text-zinc-300 font-mono text-[11px] leading-relaxed p-4 h-[280px] overflow-y-auto space-y-2 border-t border-border/40 scrollbar-thin scrollbar-track-zinc-900 scrollbar-thumb-zinc-800"
+                  >
+                    {activeSuite && activeSuite.logs.length > 0 ? (
+                      activeSuite.logs.map((logItem, index) => {
+                        let textClass = 'text-zinc-300';
+                        if (logItem.type === 'success') textClass = 'text-emerald-400 font-bold';
+                        else if (logItem.type === 'warn') textClass = 'text-amber-400 font-semibold';
+                        else if (logItem.type === 'error') textClass = 'text-red-400 font-bold animate-pulse';
+                        else if (logItem.type === 'info') {
+                          if (logItem.message.startsWith('[KNOWN VARIANCE]') || logItem.message.startsWith('[VARIANCE]')) {
+                            textClass = 'text-amber-300';
+                          } else if (logItem.message.startsWith('✓')) {
+                            textClass = 'text-emerald-400';
+                          } else {
+                            textClass = 'text-zinc-400';
+                          }
+                        }
+
+                        return (
+                          <div key={index} className="flex gap-2.5 items-start">
+                            <span className="text-zinc-600 select-none text-[10px] pt-0.5">{logItem.timestamp}</span>
+                            <span className="text-primary select-none text-[10px] pt-0.5">❯</span>
+                            <span className={`whitespace-pre-wrap ${textClass}`}>{logItem.message}</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center text-zinc-600 space-y-2 py-10 font-sans">
+                        <Database size={28} className="opacity-20 animate-pulse text-primary" />
+                        <p className="text-xs font-semibold text-zinc-500">
+                          {lang === 'ar'
+                            ? `انقر على 'تشغيل الفحص' لتشغيل مجموعة (${activeSuite ? (lang === 'ar' ? activeSuite.nameAr : activeSuite.nameEn) : ''})`
+                            : `Click 'Run Test' to validate (${activeSuite ? activeSuite.nameEn : ''})`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expected Variances Card */}
+                <div className="border border-amber-500/20 bg-amber-500/[0.02] dark:bg-amber-500/[0.01] rounded-lg p-4 text-xs space-y-2 border-l-4 border-l-amber-500 animate-scale-in">
+                  <div className="flex items-center gap-2 text-amber-500 dark:text-amber-400 font-bold font-sans">
+                    <HelpCircle size={14} />
+                    <span>{lang === 'ar' ? 'التباينات الموثقة ومعالجة الأخطاء الخارجية' : 'Documented Variances & Dynamic Corrections'}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-sans">
+                    {lang === 'ar'
+                      ? 'تتميز منظومة quran-meta بتصحيح ومعالجة العيوب الموثقة في البيانات الخام لخطوط مجمع الملك فهد والواجهات البرمجية الأخرى تلقائياً:'
+                      : 'The quran-meta engine automatically resolves documented layout variations and data gaps in raw official datasets:'}
+                  </p>
+                  <ul className="list-disc list-inside space-y-1.5 text-[10px] text-muted-foreground/90 pl-1.5 rtl:pr-1.5 rtl:pl-0 font-sans">
+                    <li>
+                      <strong className="text-amber-500 dark:text-amber-400/90">{lang === 'ar' ? 'أخطاء إحداثيات قالون:' : 'KFGQPC Qalun coordinates:'}</strong>{' '}
+                      {lang === 'ar'
+                        ? 'يحتوي خط قالون على أخطاء رسمية موثقة في توزيع إحداثيات الجزء 20 و 22 للآيات (3211-3213 و 3558-3561). يتعامل معها المحرك بذكاء ويتجاوز الخطأ ليفرض التقسيم الصحيح تماماً.'
+                        : 'Official Qalun datasets contain documented errors mapping Juz 20 and 22 boundary offsets for Ayahs 3211-3213 and 3558-3561. The engine dynamically overrides these errors to enforce absolute scriptural correctness.'}
+                    </li>
+                    <li>
+                      <strong className="text-amber-500 dark:text-amber-400/90">{lang === 'ar' ? 'أرباع أحزاب رواية ورش:' : 'Warsh Hizb Quarter discrepancies:'}</strong>{' '}
+                      {lang === 'ar'
+                        ? 'تختلف مواضع الرموز والبدايات الخاصة بأرباع الأحزاب في المصحف المغربي (المعتمد لرواية ورش) مقارنة بالمشرقي. يصنفها المحرك كتابينات إحداثيات تجميلية دون التضحية بالصحة البنيوية.'
+                        : 'The Warsh Moroccan Mushaf layout places certain Hizb Quarter indicators at slightly different verse locations compared to the Mashriqi Mushaf. The engine marks these as cosmetic layout variations and preserves underlying structural rules.'}
+                    </li>
+                  </ul>
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
         </section>
 

@@ -17,6 +17,7 @@ This project is a dedicated interactive visual environment. Here is how it compa
 | **Recitation Comparison** | **Separate modules**: Requires manually importing and invoking engines (e.g., `quran-meta/hafs` vs `quran-meta/warsh`) individually in code. | **Unified Cross-Recitation Table**: Compares global statistics side-by-side, dynamically auditing column counts and automatically displaying glowing LED mismatch status indicators where differences occur. |
 | **Interactive Querying** | Must be coded and executed in a console or script runner. | **Instant Multi-Mode Search**: 6 powerful search/lookup sliders and text fields (Surah/Ayah, Page, Juz, Manzil, Ruku, Absolute Ayah ID) with interactive selected cards. |
 | **Code Generation** | None. | **Live Code Playground**: Generates clean, ready-to-use ESM imports and functions dynamically as you interact with the UI, complete with one-click clipboard copying. |
+| **Data Validation** | **CLI Script**: Relies on running programmatic CLI checks (`pnpx jiti examples/data-check`) outputting text in a local terminal. | **Real-Time Visual Validation Suite**: Runs 8 dynamic suites containing over 30,000 assertions against external databases in the browser. Features active stats gauges (Assertions, Mismatches, Speed) and a retro dark-theme diagnostic console detailing overridden raw dataset errors. |
 
 ---
 
@@ -28,6 +29,7 @@ This project is a dedicated interactive visual environment. Here is how it compa
 - **Bilingual Interface (العربية & English)**: Toggle translations instantly with full, responsive layout shifting (RTL ↔ LTR direction adjustment).
 - **Interactive Closed Dropdowns**: Selecting a Surah transforms the selection field into a rich, detailed metadata card with Meccan/Medinan indicators, verse count, and calligraphy.
 - **Monochrome Glassmorphic Theme**: Dark/Light mode selector styled in monochrome Shadcn preset `b3QvrJJs8`.
+- **Real-Time Data Correctness Suite**: An interactive browser-based test runner executing 30,000+ assertions against 8 external references (Tanzil, AlQuran Cloud, Fawaz Ahmed, and official KFGQPC Hafs/Smart/Shuba/Qalun/Warsh datasets) in a dark scrolling terminal-style console, highlighting how `quran-meta` automatically corrects raw dataset discrepancies.
 
 ---
 
