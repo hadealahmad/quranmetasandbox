@@ -21,16 +21,25 @@ export interface ValidationSuiteState {
 
 export type LogCallback = (message: string, type: TestLog['type']) => void;
 
+// Helper to prefix URL with the correct base path for environment-specific routing (e.g. GitHub Pages)
+function getAbsoluteUrl(path: string): string {
+  const baseUrl = import.meta.env.BASE_URL || '/';
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${baseUrl}${cleanPath}`;
+}
+
 // Asynchronously load a dynamic JSON dataset
 async function fetchJson(url: string): Promise<any> {
-  const res = await fetch(url);
+  const absoluteUrl = getAbsoluteUrl(url);
+  const res = await fetch(absoluteUrl);
   if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
   return res.json();
 }
 
 // Asynchronously load Tanzil metadata using fetch and dynamic evaluation
 async function fetchTanzilData(): Promise<any> {
-  const res = await fetch('/data/tanzil-data.js');
+  const absoluteUrl = getAbsoluteUrl('/data/tanzil-data.js');
+  const res = await fetch(absoluteUrl);
   if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
   const text = await res.text();
   // Safely replace the ES default export statement with a return instruction
